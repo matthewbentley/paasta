@@ -111,11 +111,42 @@ A yelpsoa-configs master runs `generate_deployments_for_service <generated/paast
 frequently. The generated ``deployments.json`` appears in ``/nail/etc/services/service_name`` throughout the cluster.
 
 Marathon masters run `deploy_marathon_services <deploy_marathon_services.html>`_,
-a thin wrapper around `setup_marathon_job <setup_marathon_job.html>`_.
+a thin wrapper around ``setup_marathon_job``.
 These scripts parse ``deployments.json`` and the current cluster state,
 then issue comands to Marathon to put the cluster into the right state
--- cluster X should be running version Y of service Z. It will take multiple
-``setup_marathon_job`` iterations for a service to reach its desired state.
+-- cluster X should be running version Y of service Z.
+
+``setup_marathon_job`` iterates over a list of service.instances to avoid
+fetching the mesos master state on each service.instance. Each service.instance
+is called an app in ``setup_marathon_job``. Since apps are independent to
+each other, it won't be a problem to cache the mesos master state which may
+become stale when apps are created or destroyed while ``setup_marathon_job``
+makes progress.
+
+``setup_marathon_job`` grabs a zookeeper lock for each app it tries to
+deploy. Locking is not necessary if `deploy_marathon_services <deploy_marathon_services.html>`_
+is the only source of app deployment. It provides safety against another
+``setup_marathon_job`` being launched, e.g. manually by operations. When
+an app being created or destroyed at marathon, another zookeeper lock is
+acquired to provide protection against other app addition/removal activities,
+e.g. the ``cleanup_marathon_jobs`` tool.
+
+It takes multiple ``setup_marathon_job`` runs to advance an app from its
+current state to the desired state. For example, below steps occur in a
+crossover bounce in separate ``setup_marathon_job`` runs:
+
+* The new app is created with marathon and marathon is working to launch
+  the required number of tasks.
+* As soon as tasks of the new app are up and running, tasks of the previous
+  app can begin draining. In an upthendown bounce, all tasks of the new app
+  need to be up before tasks of the previous app can start to drain.
+* Tasks of the previous app can now be killed if they have been draining
+  for ``delay`` seconds so that the load balancer have stopped traffic to
+  these tasks. The old app is removed from marathon when all of its tasks
+  have been killed.
+
+``setup_marathon_job`` skips above steps when an app have reached its
+desired state.
 
 How PaaSTA Runs Docker Containers
 ---------------------------------
@@ -256,12 +287,6 @@ Current master has three draining methods:
   the hacheck draining method sets an expiration when marking an instance down on
   hacheck. hacheck will drop the down state if it receives a status query after
   expiration.
-
-**What is the rationale behind the expiration logic? We have seen boucing being
-slowed down by this logic. In addition, will it create inconsistency if draining
-brings an instance back to up after expiration while haproxy thinks it is down?
-haproxy will have to keep pinging hacheck for the same expiraiton before truely
-remove it.**
 
 Monitoring
 ----------
