@@ -1,0 +1,12 @@
+{
+  "libraries": [
+    {
+      "file": "/usr/lib/mesos/libvaulthook.so",
+      "modules": [
+        {
+          "name": "com_yelp_VaultHook"
+        }
+      ]
+    }
+  ]
+}

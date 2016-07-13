@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM ubuntu:trusty
+FROM docker-dev.yelpcorp.com/trusty_yelp
 RUN echo "deb http://repos.mesosphere.com/ubuntu trusty main" > /etc/apt/sources.list.d/mesosphere.list
 RUN echo "deb http://apt.dockerproject.org/repo ubuntu-trusty main" > /etc/apt/sources.list.d/docker.list
 RUN apt-key adv --keyserver keyserver.ubuntu.com --recv 58118E89F3A912897C070ADBF76221572C52609D
@@ -22,3 +22,6 @@ ADD mesos-secrets /etc/mesos-secrets
 ADD mesos-slave-secret /etc/mesos-slave-secret
 RUN echo '{}' > /root/.dockercfg
 RUN chmod 600 /etc/mesos-secrets
+
+ADD vault_hook.json /etc/vault_hook.json
+RUN apt-get update && apt-get install -y mesos-vault-hook=0.1.4-yelp1
